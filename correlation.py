@@ -6,10 +6,13 @@ import os
 import math
 import scipy
 from scipy.stats import pearsonr as r
+from glob import glob
 
+
+bscount = 100
 path = "S:/Mark/Research/Fish Behavioural/30062017 Arnold Looming/Run2"
 
-track = "2017-06-30_11-11-47_track.csv"
+track = ""
 profile = "looming.csv"
 asrun = "looming.npy"
 
@@ -17,6 +20,7 @@ asrun = "looming.npy"
 # startoffset = 2*60+59
 startoffset = 6
 
+plt.figure()
 
 
 def find_nearest(array, value):
@@ -32,16 +36,15 @@ def import_asrun(filename):
     log_mat = np.zeros((len(file), 11))
     for ix, row in enumerate(file):
         log_mat[ix, :] = np.array(row.split(' '))[[0, 2,3,4,5,6,7,8,9,10,11]]
-
     return log_mat
 
 
-def main():
+def generate_correlated_list():
 
     global track, profile, asrun, startoffset, corlist
 
     os.chdir(path)
-
+    track = glob("*track.csv")[0]
     track = pandas.read_csv(track)
     profile = np.genfromtxt(profile, delimiter=',')
     asrun = import_asrun(asrun)
@@ -49,8 +52,6 @@ def main():
 
 
     track = track.values
-    # profile = profile.values
-
     trackLength = track.shape[0]
     profileLength = profile.shape[0]
     asrunLength = asrun[-1,0]
@@ -58,16 +59,6 @@ def main():
     # convert timescale to seconds, match the profile
     track[:, 1] = track[:, 1]/1000
 
-    # track[:,1] is time
-    #
-    # fig, ax1 = plt.subplots()
-    # ax1.plot((profile[:,0] + 2*60 + 59)*1000, profile[:,1])
-    # ax2 = ax1.twinx()
-    # ax2.plot(track[:,1], track[:,2], 'r-')
-    #
-    # for ix, time in enumerate(track[:,1]):
-    #     nind = find_nearest(profile[:,0], time % (profile[-1,0] + 0.05))
-    #     print(nind, profile[nind, 0], time)
     sIn = np.abs(track[:,1]-startoffset).argmin()
     eIn = np.abs(track[:,1]-(startoffset + asrunLength)).argmin()
 
@@ -92,7 +83,6 @@ def main():
 
     r(corlist[:,0], corlist[:,1])
 
-    # plt.xcorr(corlist[:,0], corlist[:,1])
 
 def bootstrap():
 
@@ -100,12 +90,49 @@ def bootstrap():
 
     # plt.plot(corlist)
     # plt.figure()
-    output = plt.xcorr(corlist[:, 0], corlist[:, 1], maxlags=274)
+    # output = plt.xcorr(corlist[:, 0], corlist[:, 1], maxlags=274)
 
 
-main()
+def xcorr(a: np.ndarray, b: np.ndarray, maxlags=274):
+    """
+    xcorr implementation!
+    plt.xcorr(x, y, maxlags=phaseshift, normed=True)
+    corresponds to
+    cor = np.correlate(a, b, mode='full')/(np.std(a) * np.std(b) * len(a))
+    note that I've only used this with len(a)=len(b). I'm guessing that it's actually the average length?
+    unnormed it's just correlate with mode='full'
+    the 'lags' values are just a slice the cor array around (cor.shape[0]-1)/2
+    """
+    sdA = np.std(a)
+    sdB = np.std(b)
+    if math.isclose(sdA, 0) or math.isclose(sdB, 0):
+        print("Std deviation too small")
+        exit()
+    cor = np.correlate(a / sdA, b / sdB, mode='full') * 2/(a.shape[0] + b.shape[0])
+    ce = int((cor.shape[0]-1)/2)
+    return cor[ce - maxlags:ce + maxlags]
+
+
+# body of code
+generate_correlated_list()
 corlist[:, 0] = corlist[:, 0] - corlist[:, 0].mean()
 corlist[:, 1] = corlist[:, 1] - corlist[:, 1].mean()
-output = plt.xcorr(corlist[:, 0], corlist[:, 1], maxlags=274)
-bootstrap()
+output = xcorr(corlist[:, 0], corlist[:, 1], maxlags=274)
+plt.plot(np.arange(-274, 274), output)
+plt.grid()
+
+# plt.figure()
+bootarray = np.zeros((274*2, bscount))
+bootarray[:, 0] = np.arange(-274, 274)
+
+for ix in range(1, bscount):
+    bootstrap()
+    output = xcorr(corlist[:, 0], corlist[:, 1], maxlags=274)
+    bootarray[:, ix] = output
+    plt.plot(bootarray[:,0], bootarray[:,ix])
+
+
+
+plt.show()
+
 

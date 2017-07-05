@@ -12,6 +12,8 @@ script in the FishVideo project (https://github.com/msmith3-uottawa-ca/FishVideo
 (https://github.com/aaronshifman/Fish_Gui)
 * Takes a startoffset in seconds. This is the time the light flashes in the video,
 indicating the beginning of an experimental run.
-* Run in interactive console. Aligned data is found in variable corlist
+* Run in interactive console. 
+* Output is data held in corlist. Each X position of the fish is aligned with the closest corresponding 
+resistor value. Both resistor values and 
 * Function "bootstrap" shuffles the order of the fish X position for statistical bootstrapping. 
 Operates in place! 
