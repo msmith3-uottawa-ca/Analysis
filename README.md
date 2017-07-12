@@ -17,3 +17,4 @@ indicating the beginning of an experimental run.
 resistor value. Both resistor values and 
 * Function "bootstrap" shuffles the order of the fish X position for statistical bootstrapping. 
 Operates in place! 
+* Generates "corlist.csv" which is the aligned track/resistor data.
