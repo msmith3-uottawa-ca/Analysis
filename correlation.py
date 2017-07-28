@@ -8,8 +8,8 @@ import scipy
 from scipy.stats import pearsonr as r
 from glob import glob
 
-bscount = 5
-path = r"S:\Mark\Research\Fish Behavioural\11072016 Arnold Null"
+bscount = 1000
+path = r"S:\Mark\Research\Fish Behavioural\18072017 Arnold Looming\Run3"
 dependent = "X"
 print("Dependent:" + dependent)
 
@@ -19,7 +19,7 @@ asrun = "looming.npy"
 
 # Offset in seconds
 # startoffset = 2*60+59
-startoffset = 6
+startoffset = 5
 
 plt.figure()
 
@@ -122,7 +122,7 @@ def xcorr(a: np.ndarray, b: np.ndarray, maxlags=274):
     if math.isclose(sdA, 0) or math.isclose(sdB, 0):
         print("Std deviation too small")
         exit()
-    cor = np.correlate(a / sdA, b / sdB, mode='full') * 2 / (a.shape[0] + b.shape[0])
+    cor = np.correlate(a / sdA, b / sdB, mode='full') / a.shape[0]
     ce = int((cor.shape[0] - 1) / 2)
     return cor[ce - maxlags:ce + maxlags]
 
@@ -131,31 +131,57 @@ def xcorr(a: np.ndarray, b: np.ndarray, maxlags=274):
 generate_correlated_list()
 corlist[:, 0] = corlist[:, 0] - corlist[:, 0].mean()
 corlist[:, 1] = corlist[:, 1] - corlist[:, 1].mean()
-output = xcorr(corlist[:, 0], corlist[:, 1], maxlags=274)
-plt.plot(np.arange(-274, 274), output, 'k-.')
+expoutput = xcorr(corlist[:, 0], corlist[:, 1], maxlags=274)
+
+plt.plot(np.arange(-274, 274), expoutput, 'k-.')
+
 plt.grid()
 
 np.savetxt("corlist.csv", corlist, delimiter=",")
 
-print("Deviation of actual correlation: " + str(np.std(output[:])))
-print("mean of actual correlation: " + str(np.mean(output)))
 # plt.figure()
 bootarray = np.zeros((274 * 2, bscount))
 bootarray[:, 0] = np.arange(-274, 274)
 devarray = np.zeros(bscount - 1)
 
 for ix in range(1, bscount):
-    cs = circshift()
+    # cs = circshift()
+    cs = bootstrap()
     output = xcorr(corlist[:, 0], cs, maxlags=274)
     # output = xcorr(corlist[:, 0], bootstrap(), maxlags=274)
     bootarray[:, ix] = output
     plt.plot(bootarray[:, 0], bootarray[:, ix])
     devarray[ix - 1] = np.std(output)
-
+plt.plot(np.arange(-274, 274), expoutput, 'k-.')
 plt.show()
 
-bootDev = np.std(bootarray[:, 1:])
-bootmean = np.mean(bootarray[:, 1:])
+# Find the 95% confidence interval of the mean
+plt.figure()
+phaselagindex = expoutput.argmin()
+print(expoutput[phaselagindex])
+ar2 = bootarray[phaselagindex, 1:]
+plt.plot(ar2)
+ar3 = np.sort(ar2)
+plt.plot(ar3)
+plt.figure()
+plt.hist(ar2, bins="auto")
+ix = int(np.floor(ar3.shape[0]*0.025))
+print("95% confidence interval: " + str(ar3[ix]) + " " + str( ar3[ix * -1 -1]))
 
-print("Deviation of bootstrapped correlation: " + str(bootDev))
-print("Mean of bootstrapped correlation: " + str(bootmean))
+
+
+#
+# vararray = np.ndarray((bootarray.shape[0], 3))
+# vararray[:,0] = bootarray[:,0]
+# vararray[:,1] = np.std(bootarray[:,1:], 1)
+# vararray[:,2] = np.mean(bootarray[:,1:], 1)
+# plt.plot(vararray[:,0], vararray[:,1:] )
+
+#
+#
+
+
+#
+# print("Phase Lag: " + str(vararray[phaselagindex, 0]))
+# print("Bootstrap mean at PL: " + str(vararray[phaselagindex, 2]))
+# print("Bootstrap dev at PL: " + str(vararray[phaselagindex, 1]))
