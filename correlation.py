@@ -8,8 +8,9 @@ import scipy
 from scipy.stats import pearsonr as r
 from glob import glob
 
+
 bscount = 1000
-path = r"S:\Mark\Research\Fish Behavioural\18072017 Arnold Looming\Run3"
+path = r"S:\Mark\Research\Fish Behavioural\Archived\01082017\Run1"
 dependent = "X"
 print("Dependent:" + dependent)
 
@@ -17,9 +18,10 @@ track = ""
 profile = "looming.csv"
 asrun = "looming.npy"
 
+light = ""
 # Offset in seconds
 # startoffset = 2*60+59
-startoffset = 5
+startoffset = 0
 
 plt.figure()
 
@@ -46,32 +48,66 @@ def generate_correlated_list():
 
     os.chdir(path)
     track = glob("*track.csv")[0]
+
     track = pandas.read_csv(track)
     profile = np.genfromtxt(profile, delimiter=',')
     asrun = import_asrun(asrun)
     asrun[:, 0] = (asrun[:, 0] - asrun[0, 0]) / 1000
-
     track = track.values
     trackLength = track.shape[0]
     profileLength = profile.shape[0]
 
-    # TEST COMMAND
-    # asrun[:,0] = asrun[:,0]/3
+    th = 40
+    light = glob("*light.csv")[0]
+    light = np.loadtxt(light, delimiter=",")
 
+    assert light.shape[0] == track.shape[0], "Different number of rows in light and track files"
+    dlight = np.diff(light)
+    fe = np.where(dlight < th * -1)[0]
+    re = np.where(dlight > th)[0]
+
+    # We should have three rising edges and three falling edges
+    assert fe.shape[0] == 3, "Insufficient falling edges in light file, found % r" % fe.shape[0]
+    assert re.shape[0] == 3, "Insufficient rising edges in light file, found %r" % fe.shape[0]
+
+    # Beginning and end times based on light flashes.
+    # They are array indicies, should be aligned to X position indicies
+    lstart = fe[0] + 1
+    lend = re[1] + 1
+
+    plt.plot(light)
+    plt.axvline(lstart)
+    plt.axvline(lend)
+    plt.figure()
+
+    print("Found begining and ending light file points")
+    print(lstart, lend)
+    print(dlight.shape[0])
+    print(track.shape[0])
     asrunLength = asrun[-1, 0]
 
+    # TODO: Trim the track file to match the light length
+    # we expect asrun to be shorter than the light?
+    assert abs(0.033333333 * (lend - lstart) - asrunLength) < 3, \
+        "Discrepancy between video (%r) and As Run (%r) experiment length" % (0.0333333333 * (lend - lstart), asrunLength)
+
+
+    print(track.shape)
+
+    # track = track[:, lstart:lend]
+
     # convert timescale to seconds, match the profile
+    # track lines up with light file
     track[:, 1] = track[:, 1] / 1000
 
-    sIn = np.abs(track[:, 1] - startoffset).argmin()
-    eIn = np.abs(track[:, 1] - (startoffset + asrunLength)).argmin()
+    # sIn = np.abs(track[:, 1]).argmin()
+    sIn = lstart
+    eIn = np.abs(track[:, 1] - (asrunLength + lstart*0.0333333)).argmin()
 
-    if sIn > eIn:
-        print("Indexing failure")
-        exit()
+    assert eIn > sIn, "Start index %r greater than End index %r" % (sIn, eIn)
     tslice = track[sIn:eIn]
     tslice[:, 1] = tslice[:, 1] - tslice[0, 1]
-
+    print(tslice.shape)
     # at this point I should have tslice and asrun roughtly time aligned
 
     corlist = np.zeros(shape=(tslice.shape[0], 2))
@@ -81,7 +117,7 @@ def generate_correlated_list():
         asIndex = find_nearest(asrun[:, 0], time)
         # print(asIndex, asrun[asIndex,0])
         # Independant var: Resistor value
-        corlist[ix, 0] = asrun[asIndex, 1]
+        corlist[ix, 0] = 1/(asrun[asIndex, 1])**2
 
         if dependent == "X":
             corlist[ix, 1] = tslice[ix, 2]
@@ -90,6 +126,7 @@ def generate_correlated_list():
 
 
             # r(corlist[:,0], corlist[:,1])
+
 
 
 def bootstrap():
@@ -107,6 +144,7 @@ def circshift():
     return np.roll(corlist[:,1], ix)
 
 
+# TODO: Seems to be a bug. Doesn't match the results of plt.xcorr for at least one autocorrelation
 def xcorr(a: np.ndarray, b: np.ndarray, maxlags=274):
     """
     xcorr implementation!
@@ -121,7 +159,7 @@ def xcorr(a: np.ndarray, b: np.ndarray, maxlags=274):
     sdB = np.std(b)
     if math.isclose(sdA, 0) or math.isclose(sdB, 0):
         print("Std deviation too small")
-        exit()
+        raise Exception("Deviation Error")
     cor = np.correlate(a / sdA, b / sdB, mode='full') / a.shape[0]
     ce = int((cor.shape[0] - 1) / 2)
     return cor[ce - maxlags:ce + maxlags]
